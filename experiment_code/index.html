@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>cml_cdm_task</title>
+  <script src="jspsych/jspsych.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+  <script src="jspsych/plugins/jspsych-html-keyboard-response.js"></script>
+  <script src="jspsych/plugins/jspsych-html-button-response.js"></script>
+  <script src="jspsych/plugins/jspsych-preload.js"></script>
+  <script src="jspsych/plugins/jspsych-image-keyboard-response.js"></script>
+  <script src="jspsych/plugins/jspsych-image-slider-response-fix.js"></script>
+  <script src="jspsych/plugins/jspsych-html-slider-response.js"></script>
+  <script src="jspsych/plugins/jspsych-external-html.js"></script>
+  <script src="jspsych/plugins/jspsych-instructions.js"></script>
+  <script src="prepost_obj.js"></script>
+  <script src="additional_variables.js"></script>
+  <script src="jspsych/plugins/jspsych-memory-2step-stake-stim.js"></script>
+  <script src="jspsych/plugins/jspsych-memory-2step-stake-test-stim.js"></script>
+  <script src="jspsych/plugins/jspsych-kool-2step-stake-alien-stim.js"></script>
+  <script src="jspsych/plugins/jspsych-kool-2step-stake-rocket-stim.js"></script>
+  <script src="jspsych/plugins/jspsych-call-function.js"></script>
+  <script src="jspsych/plugins/jspsych-survey-text.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js"></script>
+  <link href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/black-tie/jquery-ui.min.css" rel="stylesheet" type="text/css"></link>
+  <link href="jspsych/css/jspsych.css" rel="stylesheet" type="text/css"></link>
+</head>
+<body></body>
+<script>
+
+var subid = ''//jsPsych.data.getURLVariable('workerId')
+//negative rewards (antimatter) can range from -5 to -1.
+//positive rewards (treasure) can range from 1 to 9.
+var max = 9
+var min = 0
+var maxmin = max - min
+var mean_rew = Math.round((min+max)/2)
+var sd = 2
+
+var check_rews = 1
+
+var piece_plur = (mean_rew == 1 || mean_rew == -1) ? (piece_s = 'piece', point_s = 'point') : (piece_s = 'pieces', point_s = 'points')
+
+if (Math.random()<0.5){
+  var rews = [Math.ceil(Math.random() * max), Math.floor(Math.random() * min)]
+} else {
+  var rews = [Math.floor(Math.random() * min), Math.ceil(Math.random() * max)]
+}
+if (Math.random()<0.5){
+  var p_rews = [Math.ceil(Math.random() * max), Math.floor(Math.random() * min)]
+} else {
+  var p_rews = [Math.floor(Math.random() * min), Math.ceil(Math.random() * max)]
+}
+var gaussian = []
+for (i = 0; i < 1000; i++) {
+  gaussian[i] = createMemberInNormalDistribution(0,sd)
+}
+
+//for drifting rewards
+function gaussianRand() {
+  var rand = 0
+  for (var i = 0; i < 6; i += 1) {
+    rand += Math.random()
+  }
+  return rand / 6
+}
+function gaussianRandom(start, end) {
+  return Math.floor(start + gaussianRand() * (end - start + 1))
+}
+
+var p_alien_1_rews = [8/9, 1, 7/9, 5/9, 3/9].map(function(x) { return Math.round(x * (maxmin)+min)})
+var p_alien_2_rews = [0, 0, 2/9, 5/9, 3/9].map(function(x) { return Math.round(x * (maxmin)+min)})
+
+/* change colors to white on black */
+var change_colors = {
+  type: 'call-function',
+  func: function(){
+    $('.jspsych-display-element').css('background-color', 'black')
+    $('.jspsych-display-element').css('color', 'white')
+  }
+}
+var change_colors_back = {
+  type: 'call-function',
+  func: function(){
+    $('.jspsych-display-element').css('background-color', 'white')
+    $('.jspsych-display-element').css('color', 'black')
+  }
+}
+
+var score = 0
+var nrtrials = 200
+// var nrtrials = 4
+var nrpracticetrials = 5
+var nralienstrials = 5
+
+var show_reminder = false
+var yellow_planet_counter = 0
+var green_planet_counter = 0
+var yellow_planet_error = 0
+var green_planet_error = 0
+var rocket_learning_criterion = 5
+var rocket_error_criterion = 3
+var stake_test_counter = 0
+var stake_test_learning_criterion = 5
+
+var rocket_1_practice_block = {
+  timeline: [reminder_1_block, rocket_practice_block],
+  loop_function: function() {
+    var data = jsPsych.data.getLastTrialData()
+    if (data.select('state2').values == 2) {
+      yellow_planet_counter = 0
+      yellow_planet_error = yellow_planet_error + 1
+    } else {
+      yellow_planet_counter = yellow_planet_counter + 1
+    }
+    if (yellow_planet_error == rocket_error_criterion){
+      yellow_planet_error = 0
+      show_reminder = true
+    } else {
+      show_reminder = false
+    }
+    return yellow_planet_counter!=rocket_learning_criterion
+  }
+}
+
+/* create timeline */
+var timeline = [];
+
+/* define welcome message trial */
+var subid_block = {
+  type: 'survey-text',
+  questions: [{prompt: "Please enter the participant's ID:", required: true}],
+  on_finish: function(data){
+    subid = data.response["Q0"]
+    // store subject ID for every trial
+    jsPsych.data.addProperties({
+      subid: subid,
+    })
+  }
+}
+
+var instructions_1_block = {
+  type: "instructions",
+  pages: [instructions_1a_text,instructions_1b_text,instructions_1c_text,instructions_1d_text(),instructions_1e_text()],
+  key_forward: "j",
+  key_backward: "f",
+  show_clickable_nav: true,
+};
+var instructions_2_block = {
+  type: "instructions",
+  pages: [instructions_2_text],
+  key_forward: "j",
+  key_backward: "f",
+  show_clickable_nav: true,
+}
+var instructions_3_block = {
+  type: "instructions",
+  pages: [instructions_3a_text,instructions_3b_text(),instructions_3c_text,instructions_3d_text],
+  key_forward: "j",
+  key_backward: "f",
+  show_clickable_nav: true,
+}
+var instructions_4_block = {
+  type: "instructions",
+  pages: [instructions_4_text],
+  key_forward: "j",
+  key_backward: "f",
+  show_clickable_nav: true,
+}
+var instructions_5_block = {
+  type: "instructions",
+  pages: [instructions_5_text()],
+  key_forward: "j",
+  key_backward: "f",
+  show_clickable_nav: true,
+}
+var instructions_6_block = {
+  type: "instructions",
+  pages: [instructions_6a_text(),instructions_6b_text, instructions_6c_text],
+  key_forward: "j",
+  key_backward: "f",
+  show_clickable_nav: true,
+}
+
+var alien_1_practice_block = {
+  timeline: [
+    {
+      type: "kool-2step-stake-alien-stim",
+      rews: function() {
+        return p_alien_1_rews.splice(0,1)
+      },
+    }
+  ],
+  repetitions: nralienstrials,
+}
+
+var alien_2_practice_block = {
+  timeline: [
+    {
+      type: "kool-2step-stake-alien-stim",
+      rews: function() {
+        return p_alien_2_rews.splice(0,1)
+      },
+    }
+  ],
+  repetitions: nralienstrials,
+  state_name: "green",
+}
+var rocket_practice_block = {
+  type: "kool-2step-stake-rocket-stim",
+}
+var reminder_1_block = {
+  timeline: [
+    {
+      type: 'instructions',
+      pages: ["Just as a reminder, pick the artifact that gets you to the yellow planet.<br><br><img style='margin:0px auto;display:block;height:200px' src='stimuli/yellow_planet.png'/><br><br>Press the spacebar to continue."],
+      key_forward: " ",
+    }
+  ],
+  conditional_function: function(){
+    return show_reminder
+  }
+}
+
+var rocket_1_practice_block = {
+  timeline: [reminder_1_block, rocket_practice_block],
+  loop_function: function() {
+    var data = jsPsych.data.getLastTrialData()
+    if (data.select('state2').values == 2) {
+      yellow_planet_counter = 0
+      yellow_planet_error = yellow_planet_error + 1
+    } else {
+      yellow_planet_counter = yellow_planet_counter + 1
+    }
+    if (yellow_planet_error == rocket_error_criterion){
+      yellow_planet_error = 0
+      show_reminder = true
+    } else {
+      show_reminder = false
+    }
+    return yellow_planet_counter!=rocket_learning_criterion
+  }
+}
+
+var reminder_2_block = {
+  timeline: [
+    {
+      type: 'instructions',
+      pages: ["Just as a reminder, pick the artifact that gets you to the green planet.<br><br><img style='margin:0px auto;display:block;height:200px' src='stimuli/green_planet.png'/><br><br>Press the spacebar to continue."],
+      key_forward: " ",
+    }
+  ],
+  conditional_function: function(){
+    return show_reminder
+  }
+}
+
+var rocket_2_practice_block = {
+  timeline: [reminder_2_block, rocket_practice_block],
+  loop_function: function() {
+    var data = jsPsych.data.getLastTrialData()
+    if (data.select('state2').values == 1) {
+      green_planet_counter = 0
+      green_planet_error = green_planet_error + 1
+    } else {
+      green_planet_counter = green_planet_counter + 1
+    }
+    if (green_planet_error == rocket_error_criterion){
+      green_planet_error = 0
+      show_reminder = true
+    } else {
+      show_reminder = false
+    }
+    return green_planet_counter!=rocket_learning_criterion
+  }
+}
+
+var space_block = {
+  timeline: [
+    {
+      timeline: [
+        {
+          type: "memory-2step-stake-stim",
+          rews: function() {
+            alldata = jsPsych.data.getLastTrialData()
+            if (alldata.length==nrpracticetrials) {
+              return rews
+            } else {
+              //drifting probabilities
+              for (j = 0; j < 2; j++) {
+                g = Math.round(gaussian[Math.floor(Math.random()*gaussian.length)])
+                rews[j] = rews[j]+g
+                rews[j] = Math.min(rews[j],Math.max(max*2 - rews[j], min))
+                rews[j] = Math.max(rews[j], Math.min(min*2 - rews[j], max))
+              }
+              return rews
+            }
+          }
+        }
+      ],
+      timing_post_trial: 0,
+      stakes: [1, 5],
+      high_arm_pstakes: [0.5, 1],
+      low_arm_pstakes: [0.5,1],
+      test_objs: test_objs,
+      rew_objs: rew_objs,
+      task_bckgrnds: task_backgrounds_zip,
+      repetitions:nrtrials/2,
+    },
+    {
+      timeline: [
+        {
+          type: 'html-keyboard-response',
+          stimulus: jsPsych.timelineVariable('stimulus'),
+          choices: [' '],
+        }
+      ],
+      timing_post_trial: 0,
+      repetitions: 1,
+    }],
+    timeline_variables: [
+      {type: "memory-2step-stake-stim", stimulus: '<p>You completed '+nrtrials/2+'/'+nrtrials+' trials. You can take a break now.<br><br>Press space to continue.</p>'},
+      {type: "memory-2step-stake-stim", stimulus: '<p>You completed '+nrtrials+'/'+nrtrials+' trials. <br><br>Press space to continue.</p>'},
+    ],
+}
+
+
+//instructions
+var judgment_1_instructions_block = {
+  type: "instructions",
+  pages: [instructions_judge_1a_text,instructions_judge_1b_text,instructions_judge_1c_text],
+  key_forward: "j",
+  key_backward: "f",
+  show_clickable_nav: true,
+};
+
+var judgment_2_instructions_block = {
+  type: "instructions",
+  pages: [instructions_judge_2_text],
+  key_forward: "j",
+  key_backward: "f",
+  show_clickable_nav: true,
+};
+
+var judgment_trials_training = {
+  timeline: [
+    {
+      type: 'html-keyboard-response',
+      stimulus: '',
+      choices: jsPsych.NO_KEYS,
+      trial_duration: 1000,
+    },
+    {
+      type: 'html-slider-response',
+      stimulus: function(){
+        stim1 = jsPsych.timelineVariable('stimulus_1')
+        stim2 = jsPsych.timelineVariable('stimulus_2')
+        return '<h3>How related are these two objects?</h3><img src='+stim1+' height="300"><img src='+stim2+' height="300"><br><br>'
+      },
+      labels:['NOT AT ALL RELATED','VERY RELATED'],
+      slider_width: 800,
+      slider_start: 0,
+      require_movement: true,
+    }
+  ],
+  timeline_variables: practice_objs,
+  randomize_order: true,
+  repetitions: 1
+}
+
+
+var judgment_trials_post = {
+  data: {task:'post_judgment', prepost: 'post', stim1: jsPsych.timelineVariable('stimulus_1'), stim2: jsPsych.timelineVariable('stimulus_2')},
+  timeline: [
+    {
+      type: 'html-keyboard-response',
+      stimulus: '',
+      choices: jsPsych.NO_KEYS,
+      trial_duration: 1000
+    },
+    {
+      type: 'html-slider-response',
+      stimulus: function(){
+        stim1 = jsPsych.timelineVariable('stimulus_1')
+        stim2 = jsPsych.timelineVariable('stimulus_2')
+        return '<h3>In terms of the task, how related are these two objects?</h3><img src='+stim1+' height="300"><img src='+stim2+' height="300"><br><br>'
+      },
+      labels:['NOT AT ALL RELATED','VERY RELATED'],
+      slider_width: 800,
+      slider_start: 0,
+      require_movement: true
+    }
+  ],
+  timeline_variables: post_obj,
+  randomize_order: true,
+  repetitions: 1
+}
+
+/* save the data */
+var save_data_2stake_block = {
+  type: 'call-function',
+  func: function(){
+    data = jsPsych.data.get().filter({trial_type: 'memory-2step-stake-stim'}).json()
+    save_data(data,'maps_2step_stake_data')
+  },
+
+}
+
+var save_post_data_sliders_block = {
+  type: 'call-function',
+  func: function(){
+    data = jsPsych.data.get().filter({task: 'post_judgment'}).filter({trial_type: 'html-slider-response'}).json()
+    save_data(data,'maps_2step_slider')
+  },
+}
+
+var post_task_block = {
+  timeline: [
+    {
+      type: 'survey-text',
+      preamble: ["Please provide us with some information about how you felt about the task:"],
+      questions: [{prompt: "How difficult did you find the task with the teleporters and generators?", required: true}, {prompt: "Was there a specific strategy you used while you did that task?", required: true},{prompt: "What did you think about when you did the relatedness task the first time?", required: true},{prompt: "Did you feel like you knew which teleporters led to which generators?", required: true},{prompt: "Did you pay attention to the backgrounds during the teleporter task?", required: true}],
+    }
+  ],
+  loop_function: function(data){
+    diff_ans = jsPsych.data.getLastTrialData().select('response').values[0]["Q0"]
+    strat_ans = jsPsych.data.getLastTrialData().select('response').values[0]["Q1"]
+    related1_ans = jsPsych.data.getLastTrialData().select('response').values[0]["Q2"]
+    related2_ans = jsPsych.data.getLastTrialData().select('response').values[0]["Q3"]
+    background_ans = jsPsych.data.getLastTrialData().select('response').values[0]["Q4"]
+    if ((diff_ans == '')||(strat_ans == '')||(related1_ans == '')||(related2_ans == '')||(background_ans=='')) {
+      alert("Please make sure you answer all questions.");
+      return true
+    }
+  },
+}
+var save_subinfo_block = {
+  type: 'call-function',
+  func: function(){
+
+    demographics_data = jsPsych.data.getLastTrialData()
+
+    subinfo = {
+      subid: subid,
+      diff: diff_ans,
+      strat: strat_ans,
+      related1: related1_ans,
+      related2: related2_ans,
+      background: background_ans,
+      time_elapsed: demographics_data.select('time_elapsed').values[0],
+    }
+    data = (JSON.stringify([subinfo]))
+    save_data(data,'maps_2step_sub_info')
+  },
+}
+
+var end_block = {
+  type: 'html-keyboard-response',
+  stimulus: function(){
+    bonus = Math.round(score/5)/100
+    return "This is the end of this experiment.<br><br>Your total score was "+score+", which means you earned $"+bonus+".<br><br>Thank you for participating!"
+  }
+}
+
+var preload = {
+  type: 'preload',
+  images: [assorted_images,p_object_file_paths,object_file_paths,preload_backgrounds],
+}
+/* start the experiment */
+jsPsych.init({
+  timeline: [
+    preload,
+    subid_block,
+    change_colors,
+    instructions_1_block,
+    alien_1_practice_block,
+    instructions_2_block,
+    alien_2_practice_block,
+    instructions_3_block,
+    rocket_1_practice_block,
+    instructions_4_block,
+    rocket_2_practice_block,
+    instructions_5_block,
+    instructions_6_block,
+    space_block,
+    save_data_2stake_block,
+    change_colors_back,
+    judgment_1_instructions_block,
+    judgment_trials_training,
+    judgment_2_instructions_block,
+    judgment_trials_post,
+    save_post_data_sliders_block,
+    post_task_block,
+    save_subinfo_block,
+    end_block
+  ],
+
+
+});
+</script>
+</html>
